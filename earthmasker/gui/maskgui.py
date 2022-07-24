@@ -197,7 +197,7 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
                 ind = self.dat.do_kdtree(np.array([event.ydata, event.xdata]))
                 self.dat.mask[max(ind[0]-self.brush_size,0):min(ind[0]+self.brush_size,self.dat.height),max(ind[1]-self.brush_size,0):min(ind[1]+self.brush_size,self.dat.width)] = np.nan
 
-            #self.im_mask.set_data(self.dat.mask)
+            self.im_mask.set_data(self.dat.mask)
 
             self.fig.canvas.draw()
             self.fig.canvas.flush_events()
