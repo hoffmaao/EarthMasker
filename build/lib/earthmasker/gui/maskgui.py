@@ -51,7 +51,7 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
 
         # Two constants to keep track of how to prompt for saves
         #: The filename, updated by things like "save as"
-        self.fn = None
+        self.fn = dat.fn
         self._saved = True
 
         # TODO ask the user whether they would like to save or not.
@@ -61,15 +61,16 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
         #: Threshold of the mask we seek
         # self.threshold_low = 255
         self.threshold = 255
+        self.brush_size = 3
         #: The mode we are in (either select or edit)
         self.mask_mode = "mask"
 
         #: The ImageData object being plotted
         self.dat = dat
 
-        self.tmp_mask = self.dat.mask.copy()
+        self.mask_tmp = self.dat.mask.copy()
 
-        (self.img, self.lims) = plot_image(
+        (self.im, self.im_mask, self.lims) = plot_image(
             self.dat, cmap=plt.cm.gray, fig=self.fig, ax=self.ax, return_plotinfo=True
         )
 
@@ -77,7 +78,14 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
 
         self.minSpinner.setValue(int(self.lims[0]))
         self.maxSpinner.setValue(int(self.lims[1]))
-        self.thresholdSpiner.setValue(self.threshold)
+        self.brushsizeSpinner.setValue(int(self.brush_size))
+        self.thresholdSpinner.setValue(self.threshold)
+        self.modeButton.clicked.connect(self._mode_update)
+        self.thresholdButton.clicked.connect(self._apply_threshold)
+
+        self.cid = self.fig.canvas.mpl_connect('button_press_event', self._on_press)
+        self.rid = self.fig.canvas.mpl_connect('buttom_release_event', self._on_release)
+        self.did = self.fig.canvas.mpl_connect('motion_notify_event', self._moved_and_pressed)
 
         # We need this so we no if we are nanpicking
         self._n_pressed = False
@@ -91,8 +99,8 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
 
         self.minSpinner.valueChanged.connect(self._lim_update)
         self.maxSpinner.valueChanged.connect(self._lim_update)
-        self.thresholdSpin.valueChanged.connect(self._threshold_update)
-        self.checkBox_2.stateChanged.connect(self._update_color_reversal)
+        self.thresholdSpinner.valueChanged.connect(self._threshold_update)
+        self.brushsizeSpinner.valueChanged.connect(self._brush_size_update)
 
         try:
             plt.show()
@@ -123,59 +131,76 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
     def _threshold_update(self, val):
         # TODO add upper theshold
         self.threshold = val
-        self.mask_tmp[self.dat > self.threshold] = 1.0
+        self.mask_tmp[:] = np.nan
+        self.mask_tmp[self.dat.data > self.threshold] = 1.0
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+    def _brush_size_update(self, val):
+        # TODO add upper theshold
+        self.brush_size = val
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
 
-        try:
-            plt.show()
-        except KeyboardInterrupt:
-            plt.close("all")
+
+    def _apply_threshold(self):
+        _translate = QtCore.QCoreApplication.translate
+        # TODO unsaved mask variable self.unsaved_mask
+        self.dat.mask = self.mask_tmp
+        self.im_mask.set_data(self.dat.mask)
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+
 
     def _mode_update(self):
         _translate = QtCore.QCoreApplication.translate
         if self.mask_mode == "mask":
-            self.modeButton.setText(_translate("MainWindow", "draw Mode"))
+            self.modeButton.setText(_translate("MainWindow", "Mask Mode"))
             self.FigCanvasWidget.setCursor(QtGui.QCursor(QtCore.Qt.CrossCursor))
             self.mask_mode = "draw"
-            self.fig.canvas.mpl_disconnect(self.bpid)
-            self.bpid = self.fig.canvas.mpl_connect(
-                "button_press_event", self._moved_and_pressed
+            self.fig.canvas.mpl_disconnect(self.cid)
+            self.fig.canvas.mpl_disconnect(self.rid)
+            self.fig.canvas.mpl_disconnect(self.did)
+            self.did = self.fig.canvas.mpl_connect(
+                "motion_notify_event", self._moved_and_pressed
             )
 
         else:
-            self.modeButton.setText(_translate("MainWindow", "Mask Mode"))
+            self.modeButton.setText(_translate("MainWindow", "Draw Mode"))
             self.FigCanvasWidget.setCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
             self.mask_mode = "mask"
-            self.fig.canvas.mpl_disconnect(self.bpid)
-            self.bpid = self.fig.canvas.mpl_connect(
-                "button_press_event", self._on_press, self.on_release
+            self.fig.canvas.mpl_disconnect(self.did)
+            self.fig.canvas.mpl_disconnect(self.cid)
+            self.fig.canvas.mpl_disconnect(self.rid)
+            self.cid = self.fig.canvas.mpl_connect(
+                "button_press_event", self._on_press,
+            )
+            self.rid = self.fig.canvas.mpl_connect(
+                "button_release_event", self._on_release
             )
 
     #######
     # Handling of mouse events
     #######
 
-    def _moved_and_pressed(event):
+    def _moved_and_pressed(self,event):
         try:
-            zooming_panning = fig.canvas.cursor().shape() != 0
+            zooming_panning = self.fig.canvas.cursor().shape() != 0
         except:
             zooming_panning = False
         if zooming_panning:
-            print("Zooming or panning")
             return
-        if event.inaxes == ax:
+        if event.inaxes == self.ax:
             if event.button == 1:
-                dist, indexes = self._do_kdtree(np.array([event.ydata, event.xdata]))
-                ind = np.unravel_index(indexes, xarray.shape)
-                mask[ind] = 1.0
+                ind = self.dat.do_kdtree(np.array([event.ydata, event.xdata]))
+                self.dat.mask[max(ind[0]-self.brush_size,0):min(ind[0]+self.brush_size,self.dat.height),max(ind[1]-self.brush_size,0):min(ind[1]+self.brush_size,self.dat.width)] = 1.0
             if event.button == 3:
-                dist, indexes = do_kdtree(np.array([event.ydata, event.xdata]))
-                ind = np.unravel_index(indexes, xarray.shape)
-                mask[ind] = np.nan
+                ind = self.dat.do_kdtree(np.array([event.ydata, event.xdata]))
+                self.dat.mask[max(ind[0]-self.brush_size,0):min(ind[0]+self.brush_size,self.dat.height),max(ind[1]-self.brush_size,0):min(ind[1]+self.brush_size,self.dat.width)] = np.nan
 
-            img_mask.set_data(mask)
-            fig.canvas.draw()
+            #self.im_mask.set_data(self.dat.mask)
+
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
 
     def _on_press(self, event):
         try:
@@ -183,46 +208,35 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
         except:
             zooming_panning = False
         if zooming_panning:
-            print("Zooming or panning")
             return
         if event.inaxes == self.ax:
-            print("press")
-            self.dist, self.indexes = self._do_kdtree(
+            self.ind_1 = self.dat.do_kdtree(
                 np.array([event.ydata, event.xdata])
             )
-            self.ind_1 = np.unravel_index(indexes, xarray.shape)
-
     def _on_release(self, event):
         try:
             zooming_panning = self.fig.canvas.cursor().shape() != 0
         except:
             zooming_panning = False
         if zooming_panning:
-            print("Zooming or panning")
             return
         if event.inaxes == self.ax:
             if event.button == 1:
-                print("release")
-                self.dist, self.indexes = self._do_kdtree(
-                    np.array([event.ydata, event.xdata])
-                )
-                self.ind_2 = np.unravel_index(indexes, xarray.shape)
+                self.ind_2 = self.dat.do_kdtree(np.array([event.ydata, event.xdata]))
                 # highlight cells
-                self.mask_tmp[
-                    self.ind_1[0] : self.ind_2[0], self.ind_2[1] : self.ind_2[1]
+                self.dat.mask[
+                    min(self.ind_1[0],self.ind_2[0]) : max(self.ind_1[0],self.ind_2[0]), min(self.ind_1[1],self.ind_2[1]) : max(self.ind_1[1],self.ind_2[1])
                 ] = 1.0
             if event.button == 3:
-                print("release")
-                self.dist, self.indexes = self._do_kdtree(
-                    np.array([event.ydata, event.xdata])
-                )
-                self.ind_2 = np.unravel_index(indexes, xarray.shape)
-                # delete cells
-                self.mask_tmp[
-                    self.ind_1[0] : self.ind_2[0], self.ind_2[1] : self.ind_2[1]
-                ] = 0.0
+                self.ind_2 = self.dat.do_kdtree(np.array([event.ydata, event.xdata]))
 
-            self.ax.figure.canvas.draw()
+                # delete cells
+                self.dat.mask[
+                    min(self.ind_1[0],self.ind_2[0]) : max(self.ind_1[0],self.ind_2[0]), min(self.ind_1[1],self.ind_2[1]) : max(self.ind_1[1],self.ind_2[1])
+                ] = np.nan
+            self.im_mask.set_data(self.dat.mask)
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
 
     #######
     # Logistics of saving and closing
@@ -266,12 +280,22 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
             )
         self._save_fn(self.fn)
 
+    def _save_as(self, event=None):
+        """Fancy file handler for gracious exit."""
+        fn, _ = QFileDialog.getSaveFileName(self,
+                                            "QFileDialog.getSaveFileName()",
+                                            self.dat.fn+'_mask',
+                                            "All Files (*);;tif Files (*.tif)")
+        if fn:
+            self._save_fn(fn)
+        return fn
+
     def _save_fn(self, fn):
         self.fn = fn
-        self.dat.save(fn[:-4] + "_mask.tif")
+        self.dat.save(fn)
         self._saved = True
-        self.actionSave_pick.triggered.disconnect()
-        self.actionSave_pick.triggered.connect(self._save)
+        self.actionSave_mask.triggered.disconnect()
+        self.actionSave_mask.triggered.connect(self._save)
 
 
 def warn(message, long_message):
@@ -291,35 +315,3 @@ def warn(message, long_message):
     msg.setWindowTitle(message)
     msg.setStandardButtons(QMessageBox.Ok)
     return msg.exec_()
-
-
-# We want to add this fancy colormap
-COLORB = [
-    (1.0000, 1.0000, 1.000),
-    (0.9984, 1.0000, 0.2000),
-    (1.0000, 0.6792, 0.6500),
-    (0.5407, 0.9000, 0.5400),
-    (0.7831, 0.8950, 0.8950),
-    (1.0000, 1.0000, 1.0000),
-    (0.3507, 0.3500, 0.7000),
-    (0.1740, 0.5800, 0.5800),
-    (0.0581, 0.5800, 0.0580),
-    (0.4792, 0.4800, 0.0600),
-    (0.8000, 0.0, 0.0),
-    (0.0, 0.0, 0.0),
-]
-
-PERCENTS = np.array([0, 63, 95, 114, 123, 127, 130, 134, 143, 162, 194, 256]) / 256.0
-
-plt.cm.register_cmap(
-    name="CEGSIC",
-    cmap=colors.LinearSegmentedColormap.from_list(
-        "CEGSIC", list(zip(PERCENTS, COLORB))
-    ),
-)
-plt.cm.register_cmap(
-    name="CEGSIC_r",
-    cmap=colors.LinearSegmentedColormap.from_list(
-        "CEGSIC_r", list(zip(PERCENTS, COLORB))
-    ),
-)

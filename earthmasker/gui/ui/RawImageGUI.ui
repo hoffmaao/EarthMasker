@@ -42,7 +42,7 @@
          </size>
         </property>
         <property name="text">
-         <string>Update Mask</string>
+         <string>Apply Theshold</string>
         </property>
        </widget>
       </item>
@@ -77,7 +77,7 @@
            </property>
            <layout class="QVBoxLayout" name="verticalLayout_10">
             <item>
-             <widget class="QSpinBox" name="thresholdSpinner_3"/>
+             <widget class="QSpinBox" name="brushsizeSpinner"/>
             </item>
            </layout>
           </widget>
@@ -269,7 +269,7 @@
      <property name="title">
       <string>Save .tif</string>
      </property>
-     <addaction name="actionSave_pick"/>
+     <addaction name="actionSave_mask"/>
      <addaction name="actionSave_as"/>
     </widget>
     <widget class="QMenu" name="menuSave_figure">
@@ -310,7 +310,7 @@
     <string>Save in place</string>
    </property>
   </action>
-  <action name="actionSave_pick">
+  <action name="actionSave_mask">
    <property name="text">
     <string>Save</string>
    </property>

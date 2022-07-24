@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import is_color_like
 
 
+
 def plot_image(dat, cmap=plt.cm.gray, fig=None, ax=None,
                    return_plotinfo=False, clims=None):
     
@@ -53,7 +54,7 @@ def plot_image(dat, cmap=plt.cm.gray, fig=None, ax=None,
 
 
     if clims is None:
-        clims = np.percentile(dat.data[~np.isnan(dat.data)], (10, 90))
+        clims = np.percentile(dat.data[~np.isnan(dat.data)], (5, 99.5))
 
     if fig is not None:
         if ax is None:
@@ -64,17 +65,19 @@ def plot_image(dat, cmap=plt.cm.gray, fig=None, ax=None,
 
 
     img = ax.imshow(dat.data,
-    	            extent=data.extent,
+    	            extent=dat.extent,
                     cmap=cmap,
                     vmin=clims[0],
                     vmax=clims[1]
                     )
-    binary_cmap = matplotlib.colors.ListedColormap(['white', 'red'])
-    img_mask = ax.imshow(dat.mask,
-    	            extent=data.extent,
-                    cmap='Reds',
-                    alpha = .5
-                    )
-    img_mask.set_clim(vmin=0, vmax=1)
 
-    return img, clims
+    img_mask = ax.imshow(dat.mask,
+    	            extent=dat.extent,
+                    cmap='Reds',
+                    alpha = .5,
+                    vmin=0,
+                    vmax=1
+                    )
+    #contour = ax.contour(dat.xarray, dat.yarray, dat.mask, (1,), colors='r', linewidths=2)
+
+    return img, img_mask, clims

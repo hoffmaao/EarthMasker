@@ -49,24 +49,24 @@ class trainingData(object):
         self.yarray = np.array(ys)
         self.initialize_tree()
         self.mask = np.zeros((self.width, self.height))
+        self.mask[:] = np.nan 
 
     def initialize_tree(self):
         self.tree = spatial.cKDTree(
             np.dstack([self.yarray.ravel(), self.xarray.ravel()])[0]
         )
 
-    def do_kdtree(self):
+    def do_kdtree(self,points):
         np.dstack([self.yarray.ravel(), self.xarray.ravel()])[0]
         dist, ind = self.tree.query(points)
         return np.unravel_index(ind, self.xarray.shape)
 
     def save(self, fn):
         if fn == None:
-            profile.update(dtype=rasterio.uint8, count=1, compress="lzw")
+            self.mask[np.isnan(self.mask)]=0.0
             with rio.open(self.fn + "_mask" + self.ext, "w", **self.profile) as dst:
-                dst.write(mask.astype(rasterio.unit8), 1)
+                dst.write((self.mask*255).astype('uint8'),1)
         else:
-            with rio.open(fn, "w", **self.profile) as dst:
-                profile.update(dtype=rasterio.uint8, count=1, compress="lzw")
+            self.mask[np.isnan(self.mask)]=0.0
             with rio.open(self.fn + "_mask" + self.ext, "w", **self.profile) as dst:
-                dst.write(mask.astype(rasterio.unit8), 1)
+                dst.write((self.mask*255).astype('uint8'),1)
