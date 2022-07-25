@@ -60,7 +60,8 @@ def plot_image(dat, cmap=plt.cm.gray, fig=None, ax=None,
         if ax is None:
             ax = plt.gca()
     else:
-        fig, ax = plt.subplots(figsize=(12, 8))
+        fig = plt.figure(figsize=(12, 8))
+        ax = fig.add_subplot()
 
 
 

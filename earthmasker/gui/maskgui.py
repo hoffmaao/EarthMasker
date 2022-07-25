@@ -47,6 +47,8 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
         self.ax = self.FigCanvasWidget.canvas.ax
         #: The figure upon which things get plotted.
         self.fig = self.FigCanvasWidget.canvas.fig
+        #plt.rcParams["figure.clear"] = True
+        #plt.rcParams["figure.num"] = 1
         plt.ion()
 
         # Two constants to keep track of how to prompt for saves
@@ -198,7 +200,6 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
                 self.dat.mask[max(ind[0]-self.brush_size,0):min(ind[0]+self.brush_size,self.dat.height),max(ind[1]-self.brush_size,0):min(ind[1]+self.brush_size,self.dat.width)] = np.nan
 
             self.im_mask.set_data(self.dat.mask)
-
             self.fig.canvas.draw()
             self.fig.canvas.flush_events()
 
