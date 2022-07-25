@@ -48,8 +48,21 @@ class trainingData(object):
         self.xarray = np.array(xs)
         self.yarray = np.array(ys)
         self.initialize_tree()
-        self.mask = np.zeros((self.width, self.height))
-        self.mask[:] = np.nan 
+
+        if os.path.exists(self.fn+'_mask'+self.ext):
+            with rio.open(self.fn+'_mask'+self.ext) as src:
+                if self.transform == src.transform:
+                    if self.extent == plotting_extent(src):
+                        self.mask = src.read(1).astype(float)
+                        self.mask[self.mask==0.0]=np.nan
+                    else:
+                        print('bad mask, did not load')
+                else:
+                    print('bad mask, did not load')
+        else:
+            self.mask = np.zeros((self.width, self.height))
+            self.mask[:] = np.nan
+
 
     def initialize_tree(self):
         self.tree = spatial.cKDTree(
@@ -62,11 +75,11 @@ class trainingData(object):
         return np.unravel_index(ind, self.xarray.shape)
 
     def save(self, fn):
+        output = self.mask.copy()
+        output[np.isnan(self.mask)]=0.0
         if fn == None:
-            self.mask[np.isnan(self.mask)]=0.0
             with rio.open(self.fn + "_mask" + self.ext, "w", **self.profile) as dst:
-                dst.write((self.mask*255).astype('uint8'),1)
+                dst.write((output*255).astype('uint8'),1)
         else:
-            self.mask[np.isnan(self.mask)]=0.0
-            with rio.open(self.fn + "_mask" + self.ext, "w", **self.profile) as dst:
-                dst.write((self.mask*255).astype('uint8'),1)
+            with rio.open(fn + self.ext, "w", **self.profile) as dst:
+                dst.write((output*255).astype('uint8'),1)

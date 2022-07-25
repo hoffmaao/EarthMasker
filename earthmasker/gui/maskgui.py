@@ -63,9 +63,9 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
         #: Threshold of the mask we seek
         # self.threshold_low = 255
         self.threshold = 255
-        self.brush_size = 3
+        self.brush_size = 2
         #: The mode we are in (either select or edit)
-        self.mask_mode = "mask"
+        self.mask_mode = "draw"
 
         #: The ImageData object being plotted
         self.dat = dat
@@ -86,8 +86,8 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
         self.thresholdButton.clicked.connect(self._apply_threshold)
 
         self.cid = self.fig.canvas.mpl_connect('button_press_event', self._on_press)
-        self.rid = self.fig.canvas.mpl_connect('buttom_release_event', self._on_release)
-        self.did = self.fig.canvas.mpl_connect('motion_notify_event', self._moved_and_pressed)
+        self.rid = self.fig.canvas.mpl_connect('button_release_event', self._on_release)
+        self.did = self.fig.canvas.mpl_connect('button_press_event', self._click)
 
         # We need this so we no if we are nanpicking
         self._n_pressed = False
@@ -137,6 +137,7 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
         self.mask_tmp[self.dat.data > self.threshold] = 1.0
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
+
     def _brush_size_update(self, val):
         # TODO add upper theshold
         self.brush_size = val
@@ -163,7 +164,7 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
             self.fig.canvas.mpl_disconnect(self.rid)
             self.fig.canvas.mpl_disconnect(self.did)
             self.did = self.fig.canvas.mpl_connect(
-                "motion_notify_event", self._moved_and_pressed
+                "button_press_event", self._click
             )
 
         else:
@@ -184,7 +185,7 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
     # Handling of mouse events
     #######
 
-    def _moved_and_pressed(self,event):
+    def _click(self,event):
         try:
             zooming_panning = self.fig.canvas.cursor().shape() != 0
         except:
@@ -194,14 +195,21 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
         if event.inaxes == self.ax:
             if event.button == 1:
                 ind = self.dat.do_kdtree(np.array([event.ydata, event.xdata]))
-                self.dat.mask[max(ind[0]-self.brush_size,0):min(ind[0]+self.brush_size,self.dat.height),max(ind[1]-self.brush_size,0):min(ind[1]+self.brush_size,self.dat.width)] = 1.0
+                if self.brush_size>0:
+                    self.dat.mask[max(ind[0]-self.brush_size,0):min(ind[0]+self.brush_size,self.dat.height),max(ind[1]-self.brush_size,0):min(ind[1]+self.brush_size,self.dat.width)] = 1.0
+                else:
+                    self.dat.mask[ind]=1.0
             if event.button == 3:
                 ind = self.dat.do_kdtree(np.array([event.ydata, event.xdata]))
-                self.dat.mask[max(ind[0]-self.brush_size,0):min(ind[0]+self.brush_size,self.dat.height),max(ind[1]-self.brush_size,0):min(ind[1]+self.brush_size,self.dat.width)] = np.nan
+                if self.brush_size>0:
+                    self.dat.mask[max(ind[0]-self.brush_size,0):min(ind[0]+self.brush_size,self.dat.height),max(ind[1]-self.brush_size,0):min(ind[1]+self.brush_size,self.dat.width)] = np.nan
+                else:
+                    self.dat.mask[ind]=np.nan
 
             self.im_mask.set_data(self.dat.mask)
             self.fig.canvas.draw()
             self.fig.canvas.flush_events()
+            self._saved = False
 
     def _on_press(self, event):
         try:
@@ -238,6 +246,7 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
             self.im_mask.set_data(self.dat.mask)
             self.fig.canvas.draw()
             self.fig.canvas.flush_events()
+            self._saved = False
 
     #######
     # Logistics of saving and closing
