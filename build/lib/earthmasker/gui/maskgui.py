@@ -288,7 +288,7 @@ class InteractiveMasker(QtWidgets.QMainWindow, RawImageGUI.Ui_MainWindow):
             raise AttributeError(
                 'Filename for gui is undefined, needs to be set with "save as"...'
             )
-        self._save_fn(self.fn)
+        self._save_fn(self.fn+'_mask'+self.ext)
 
     def _save_as(self, event=None):
         """Fancy file handler for gracious exit."""
